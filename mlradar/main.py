@@ -744,7 +744,7 @@ async def ml_auth_callback(code: str = Query(...)):
             "client_id":     ML_APP_ID,
             "client_secret": ML_SECRET_KEY,
             "code":          code,
-            "redirect_uri":  "http://localhost:8000/api/ml-auth/callback",
+            "redirect_uri":  "https://ml-radar-gamma.vercel.app/api/ml-auth/callback",
         })
         if r.status_code != 200:
             raise HTTPException(status_code=400, detail=f"OAuth falhou: {r.text}")
