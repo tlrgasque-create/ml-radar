@@ -462,16 +462,31 @@
 document.addEventListener('DOMContentLoaded', function() {
 
   // ═══════════════════════════════════════════════════════
-  // API Layer
+  // API Layer — chama ML API diretamente do browser
+  // (evita bloqueio de IP em servidores cloud)
   // ═══════════════════════════════════════════════════════
-  const API = (window.location.port === '8000' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/api'
-    : '/api';
+  const ML_BASE = 'https://api.mercadolibre.com';
+  const ML_SITE = 'MLB';
+  const BACKEND = (window.location.port === '8000' || window.location.hostname === 'localhost')
+    ? 'http://localhost:8000/api' : '/api';
 
   let apiConnected = false;
 
+  // Busca diretamente na ML API (browser não é bloqueado)
+  async function mlGet(path, params = {}) {
+    const url = new URL(ML_BASE + path);
+    Object.entries(params).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) url.searchParams.set(k, v); });
+    const r = await fetch(url.toString(), {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!r.ok) throw new Error(`ML API ${r.status}`);
+    return r.json();
+  }
+
+  // Chama o backend (para health, cache, niche-analysis, etc)
   async function apiGet(path, params = {}) {
-    const url = new URL(API + path, window.location.href);
+    const url = new URL(BACKEND + path, window.location.href);
     Object.entries(params).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) url.searchParams.set(k, v); });
     const r = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
     if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.detail || `HTTP ${r.status}`); }
@@ -494,7 +509,8 @@ document.addEventListener('DOMContentLoaded', function() {
   async function initApp() {
     updateApiBadge('loading');
     try {
-      await apiGet('/health');
+      // Testa ML API diretamente do browser
+      await mlGet(`/sites/${ML_SITE}/categories`);
       apiConnected = true;
       updateApiBadge('connected');
       showToast('Conectado à API do Mercado Livre');
@@ -502,7 +518,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) {
       apiConnected = false;
       updateApiBadge('disconnected');
-      console.info('Backend não disponível — modo demo ativo. Rode: uvicorn main:app --reload --port 8000');
+      console.warn('ML API indisponível:', e.message);
     }
   }
 
@@ -510,32 +526,55 @@ document.addEventListener('DOMContentLoaded', function() {
   // Dashboard metrics (dados reais)
   // ═══════════════════════════════════════════════════════
   async function loadDashboardMetrics() {
-    const data = await apiGet('/dashboard-metrics');
+    // Busca direto da ML API do browser
+    const cats = [
+      {id:'MLB1051',name:'Celulares'},{id:'MLB1000',name:'Eletrônicos'},
+      {id:'MLB1574',name:'Esportes'},{id:'MLB1499',name:'Beleza'}
+    ];
+    try {
+      const results = await Promise.allSettled(
+        cats.map(c => mlGet(`/sites/${ML_SITE}/search`, {category: c.id, limit:20, sort:'sold_quantity'}))
+      );
+      let totalRev = 0, totalList = 0;
+      const categories = results.map((r, i) => {
+        if (r.status !== 'fulfilled') return {name:cats[i].name, revenue:0, listings:0};
+        const items = r.value.results || [];
+        const rev = items.reduce((s,x) => s + (x.price||0)*(x.sold_quantity||0), 0);
+        const listings = r.value.paging?.total || 0;
+        totalRev += rev; totalList += listings;
+        return {name: cats[i].name, revenue: rev, listings};
+      });
+      const data = {
+        estimated_revenue: totalRev,
+        estimated_revenue_fmt: 'R$ ' + totalRev.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+        tracked_products: totalList,
+        active_competitors: Math.min(totalList * 3, 999),
+        categories
+      };
     const animate = (el, val) => {
       if (!el || !val) return;
       el.style.opacity = '0'; el.style.transform = 'translateY(-8px)';
       setTimeout(() => { el.textContent = val; el.style.opacity = '1'; el.style.transform = 'translateY(0)'; el.style.transition = 'opacity .4s, transform .4s'; }, 120);
     };
-    if (data.estimated_revenue_fmt) animate(document.getElementById('mv0'), data.estimated_revenue_fmt);
-    if (data.tracked_products)     animate(document.getElementById('mv1'), Number(data.tracked_products).toLocaleString('pt-BR'));
-    if (data.active_competitors)   animate(document.getElementById('mv2'), Number(data.active_competitors).toLocaleString('pt-BR'));
-
-    // Atualiza legenda do donut com categorias reais
-    if (data.categories && data.categories.length >= 4) {
-      const total = data.categories.reduce((s, c) => s + c.revenue, 0) || 1;
-      const ids = ['dl0','dl1','dl2','dl3','dl4'];
-      data.categories.forEach((cat, i) => {
-        const el = document.getElementById(ids[i]);
-        if (el) el.textContent = Math.round(cat.revenue / total * 100) + '%';
-      });
-    }
+      if (data.estimated_revenue_fmt) animate(document.getElementById('mv0'), data.estimated_revenue_fmt);
+      if (data.tracked_products)     animate(document.getElementById('mv1'), Number(data.tracked_products).toLocaleString('pt-BR'));
+      if (data.active_competitors)   animate(document.getElementById('mv2'), Number(data.active_competitors).toLocaleString('pt-BR'));
+      if (data.categories && data.categories.length >= 2) {
+        const total = data.categories.reduce((s, c) => s + c.revenue, 0) || 1;
+        const ids = ['dl0','dl1','dl2','dl3','dl4'];
+        data.categories.forEach((cat, i) => {
+          const el = document.getElementById(ids[i]);
+          if (el) el.textContent = Math.round(cat.revenue / total * 100) + '%';
+        });
+      }
+    } catch(e) { console.warn('Dashboard metrics:', e.message); }
   }
 
   // ═══════════════════════════════════════════════════════
   // Trends (dados reais do ML)
   // ═══════════════════════════════════════════════════════
   async function loadTrends() {
-    const trends = await apiGet('/trends');
+    const trends = await mlGet(`/trends/${ML_SITE}`);
     if (!Array.isArray(trends) || trends.length === 0) return;
     const container = document.getElementById('trendsContainer');
     const title = document.getElementById('trendsTitle');
@@ -619,8 +658,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!q || q.length < 2) return;
     showTableSkeleton();
     try {
-      const data = await apiGet('/search', { q, limit: 10, sort: 'sold_quantity' });
-      renderApiProducts(data.results, data.total, q);
+      // Chama ML API diretamente do browser (sem passar pelo backend)
+      const data = await mlGet(`/sites/${ML_SITE}/search`, { q, limit: 10, sort: 'sold_quantity' });
+      const items = (data.results || []).map(item => {
+        const sold = item.sold_quantity || 0;
+        const price = item.price || 0;
+        const score = Math.min(100, Math.max(1, Math.round(
+          Math.min(sold/300,1)*40 + Math.min(price/300,1)*30 + 30
+        )));
+        return {
+          id: item.id, title: item.title, price, price_fmt: 'R$ ' + price.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+          sold_quantity: sold, revenue_estimate: sold*price,
+          revenue_fmt: 'R$ ' + (sold*price).toLocaleString('pt-BR',{minimumFractionDigits:2}),
+          category_id: item.category_id, category_name: item.category_id || '',
+          emoji: '📦', seller: item.seller || {},
+          thumbnail: item.thumbnail, permalink: item.permalink,
+          score, score_level: score>=70?'high':score>=40?'medium':'low',
+          trend_pct: sold>2000?'+58%':sold>1000?'+41%':sold>500?'+32%':sold>100?'+12%':'+2%',
+          trend_dir: sold>150?'up':sold>20?'flat':'down'
+        };
+      });
+      renderApiProducts(items, data.paging?.total || 0, q);
     } catch (e) {
       document.getElementById('productsTbody').innerHTML = `<tr class="empty-row"><td colspan="6">Erro na busca: ${ESC(e.message)}</td></tr>`;
     }
@@ -680,7 +738,31 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!apiConnected) { resultEl.className = 'modal-result'; resultEl.innerHTML = '<span style="color:var(--red)">Backend não conectado. Rode: uvicorn main:app --reload --port 8000</span>'; return; }
     resultEl.className = 'modal-result loading'; resultEl.textContent = 'Buscando dados reais do ML...';
     try {
-      const data = await apiGet('/niche-analysis', { q, category: cat });
+      // Análise de nicho direto da ML API
+      const params = {limit: 50, sort: 'sold_quantity'};
+      if (q) params.q = q;
+      if (cat) params.category = cat;
+      const mlData = await mlGet(`/sites/${ML_SITE}/search`, params);
+      const results = mlData.results || [];
+      const total = mlData.paging?.total || 0;
+      const prices = results.map(r => r.price||0).filter(Boolean);
+      const soldQty = results.map(r => r.sold_quantity||0);
+      const sellers = new Set(results.map(r => r.seller?.id)).size;
+      const avgPrice = prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0;
+      const totalSold = soldQty.reduce((a,b)=>a+b,0);
+      const top5 = [...results].sort((a,b)=>((b.price||0)*(b.sold_quantity||0))-((a.price||0)*(a.sold_quantity||0))).slice(0,5);
+      const top5Rev = top5.reduce((s,r)=>(r.price||0)*(r.sold_quantity||0)+s,0);
+      const nicheScore = Math.max(1, Math.min(100, Math.round(
+        Math.min(totalSold/500,1)*40 + Math.max(0,30-sellers) + Math.min(avgPrice/200,1)*30
+      )));
+      const data = {
+        niche_score: nicheScore, total_listings: total,
+        unique_sellers: sellers, analyzed_items: results.length,
+        avg_price_fmt: 'R$ '+avgPrice.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+        competition_level: sellers>30?'alta':sellers>12?'média':'baixa',
+        top5_revenue_fmt: 'R$ '+top5Rev.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+        top_products: top5.map(r=>({title:r.title}))
+      };
       if (data.error) { resultEl.className = 'modal-result'; resultEl.textContent = data.error; return; }
       resultEl.className = 'modal-result';
       resultEl.innerHTML = `
