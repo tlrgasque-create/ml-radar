@@ -472,14 +472,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let apiConnected = false;
 
-  // Busca diretamente na ML API (browser não é bloqueado)
+  // Busca na ML API via backend (que tem o token OAuth configurado)
+  // O backend já está no mesmo domínio vercel.app — sem CORS
   async function mlGet(path, params = {}) {
+    // Mapeia endpoints ML para rotas do backend
+    const routeMap = {
+      [`/sites/${ML_SITE}/search`]: '/search',
+      [`/sites/${ML_SITE}/categories`]: '/categories',
+      [`/trends/${ML_SITE}`]: '/trends',
+    };
+    const backendPath = routeMap[path];
+    if (backendPath) {
+      // Usa o backend que tem o token OAuth e não é bloqueado
+      const url = new URL(BACKEND + backendPath, window.location.href);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) url.searchParams.set(k, v);
+      });
+      const r = await fetch(url.toString(), { signal: AbortSignal.timeout(15000) });
+      if (!r.ok) { const e = await r.json().catch(()=>{}); throw new Error(e?.detail || `HTTP ${r.status}`); }
+      const data = await r.json();
+      // Normaliza resposta do backend para formato ML
+      if (backendPath === '/search') {
+        return { results: data.results || [], paging: { total: data.total || 0 } };
+      }
+      return data;
+    }
+    // Fallback direto para outros endpoints
     const url = new URL(ML_BASE + path);
     Object.entries(params).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) url.searchParams.set(k, v); });
-    const r = await fetch(url.toString(), {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(12000)
-    });
+    const r = await fetch(url.toString(), { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(12000) });
     if (!r.ok) throw new Error(`ML API ${r.status}`);
     return r.json();
   }
@@ -658,7 +679,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!q || q.length < 2) return;
     showTableSkeleton();
     try {
-      // Chama ML API diretamente do browser (sem passar pelo backend)
+      // Busca via backend (tem token OAuth, sem bloqueio de IP)
       const data = await mlGet(`/sites/${ML_SITE}/search`, { q, limit: 10, sort: 'sold_quantity' });
       const items = (data.results || []).map(item => {
         const sold = item.sold_quantity || 0;
