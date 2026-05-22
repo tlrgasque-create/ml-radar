@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ML Radar — Inteligência de Mercado Livre</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --bg-deep:#08090c; --bg-surface:#0e1117; --bg-card:#141920;
+      --bg-card-hover:#1a2030; --bg-elevated:#1c2333;
+      --border:#1e2736; --border-light:#2a3548;
+      --accent:#00f5a0; --accent-dim:#00c27e;
+      --accent-glow:rgba(0,245,160,0.15); --accent-glow-strong:rgba(0,245,160,0.3);
+      --cyan:#00d4ff; --cyan-dim:#009fcc; --orange:#ff8c42;
+      --red:#ff4757; --purple:#a855f7; --yellow:#fbbf24;
+      --text-primary:#e8edf5; --text-secondary:#8892a4; --text-muted:#5a6478;
+      --radius:12px; --radius-sm:8px; --shadow:0 4px 24px rgba(0,0,0,.3);
+      --shadow-lg:0 8px 40px rgba(0,0,0,.4); --transition:.25s cubic-bezier(.4,0,.2,1);
+    }
+    html { font-size:14px; }
+    body { font-family:'Inter',system-ui,sans-serif; background:var(--bg-deep); color:var(--text-primary); min-height:100vh; overflow-x:hidden; }
+    body::after { content:''; position:fixed; top:-200px; right:-200px; width:600px; height:600px; background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%); pointer-events:none; z-index:0; }
+    .app { display:grid; grid-template-columns:260px 1fr; min-height:100vh; position:relative; z-index:1; }
+
+    /* ─── Sidebar ─── */
+    .sidebar { background:var(--bg-surface); border-right:1px solid var(--border); padding:28px 20px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; transition:transform var(--transition); }
+    .logo { display:flex; align-items:center; gap:12px; margin-bottom:40px; padding:0 4px; }
+    .logo-icon { width:40px; height:40px; background:linear-gradient(135deg,var(--accent),var(--cyan)); border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:800; font-size:18px; color:var(--bg-deep); }
+    .logo-text { font-family:'Syne',sans-serif; font-weight:700; font-size:1.3rem; color:var(--text-primary); letter-spacing:-.02em; }
+    .logo-text span { color:var(--accent); }
+    .nav-section { margin-bottom:32px; }
+    .nav-label { font-family:'DM Mono',monospace; font-size:.7rem; font-weight:500; color:var(--text-muted); text-transform:uppercase; letter-spacing:.12em; padding:0 12px; margin-bottom:10px; }
+    .nav-item { display:flex; align-items:center; gap:12px; width:100%; background:transparent; border:none; text-align:left; padding:10px 12px; border-radius:var(--radius-sm); color:var(--text-secondary); cursor:pointer; transition:var(--transition); font-size:.93rem; font-family:'Inter',sans-serif; position:relative; }
+    .nav-item:hover { background:rgba(255,255,255,.04); color:var(--text-primary); }
+    .nav-item.active { background:var(--accent-glow); color:var(--accent); font-weight:500; }
+    .nav-item.active::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:20px; background:var(--accent); border-radius:0 3px 3px 0; }
+    .nav-icon { width:20px; height:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .nav-icon svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .nav-badge { margin-left:auto; background:var(--accent); color:var(--bg-deep); font-size:.65rem; font-weight:600; padding:2px 7px; border-radius:10px; font-family:'DM Mono',monospace; }
+    .nav-badge.badge-orange { background:var(--orange); }
+    .nav-badge.badge-red { background:var(--red); color:#fff; }
+    .sidebar-footer { margin-top:auto; padding-top:20px; border-top:1px solid var(--border); }
+    .plan-card { background:linear-gradient(135deg,rgba(0,245,160,.08),rgba(0,212,255,.05)); border:1px solid rgba(0,245,160,.15); border-radius:var(--radius); padding:16px; }
+    .plan-name { font-family:'Syne',sans-serif; font-weight:600; font-size:.85rem; color:var(--accent); margin-bottom:4px; }
+    .plan-desc { font-size:.78rem; color:var(--text-muted); margin-bottom:12px; }
+    .plan-bar { height:4px; background:var(--bg-elevated); border-radius:2px; overflow:hidden; margin-bottom:6px; }
+    .plan-bar-fill { height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--cyan)); border-radius:2px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+    .plan-usage { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--text-muted); }
+
+    /* ─── Main ─── */
+    .main { padding:28px 32px; overflow-y:auto; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; gap:16px; flex-wrap:wrap; }
+    .topbar-left h1 { font-family:'Syne',sans-serif; font-weight:700; font-size:1.6rem; letter-spacing:-.02em; margin-bottom:4px; }
+    .topbar-left p { color:var(--text-muted); font-size:.85rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .topbar-title-row { display:flex; align-items:center; gap:12px; }
+    .topbar-right { display:flex; align-items:center; gap:12px; }
+    .search-box { display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 14px; width:280px; transition:var(--transition); }
+    .search-box:focus-within { border-color:var(--accent-dim); box-shadow:0 0 0 3px var(--accent-glow); }
+    .search-box svg { width:16px; height:16px; stroke:var(--text-muted); fill:none; stroke-width:2; flex-shrink:0; }
+    .search-box input { background:transparent; border:none; outline:none; color:var(--text-primary); font-size:.85rem; width:100%; font-family:'Inter',sans-serif; }
+    .search-box input::placeholder { color:var(--text-muted); }
+    .topbar-btn { width:38px; height:38px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition); position:relative; }
+    .topbar-btn:hover { border-color:var(--border-light); background:var(--bg-card-hover); }
+    .topbar-btn svg { width:18px; height:18px; stroke:var(--text-secondary); fill:none; stroke-width:1.8; }
+    .topbar-btn .dot { position:absolute; top:8px; right:8px; width:7px; height:7px; background:var(--red); border-radius:50%; border:2px solid var(--bg-card); }
+    .menu-toggle { display:none; background:var(--bg-card); border:1px solid var(--border); color:var(--text-primary); padding:8px; border-radius:var(--radius-sm); cursor:pointer; align-items:center; justify-content:center; }
+    .avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--cyan)); display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:700; font-size:.85rem; color:var(--bg-deep); cursor:pointer; flex-shrink:0; }
+
+    /* API status badge */
+    .api-badge { font-family:'DM Mono',monospace; font-size:.72rem; padding:4px 10px; border-radius:6px; border:1px solid; cursor:pointer; white-space:nowrap; transition:var(--transition); background:transparent; }
+    .api-badge.connected { color:var(--accent); border-color:rgba(0,245,160,.3); }
+    .api-badge.disconnected { color:var(--text-muted); border-color:var(--border); }
+    .api-badge.loading { color:var(--cyan); border-color:rgba(0,212,255,.3); }
+
+    /* ─── Metrics ─── */
+    .metrics-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+    .metric-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; position:relative; overflow:hidden; transition:var(--transition); animation:fadeUp .5s ease both; }
+    .metric-card:nth-child(1){animation-delay:.05s} .metric-card:nth-child(2){animation-delay:.1s}
+    .metric-card:nth-child(3){animation-delay:.15s} .metric-card:nth-child(4){animation-delay:.2s}
+    .metric-card:hover { border-color:var(--border-light); transform:translateY(-2px); box-shadow:var(--shadow); }
+    .metric-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+    .metric-card:nth-child(1)::before{background:linear-gradient(90deg,var(--accent),transparent)}
+    .metric-card:nth-child(2)::before{background:linear-gradient(90deg,var(--cyan),transparent)}
+    .metric-card:nth-child(3)::before{background:linear-gradient(90deg,var(--orange),transparent)}
+    .metric-card:nth-child(4)::before{background:linear-gradient(90deg,var(--purple),transparent)}
+    .metric-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .metric-icon { width:36px; height:36px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
+    .metric-card:nth-child(1) .metric-icon{background:rgba(0,245,160,.1);color:var(--accent)}
+    .metric-card:nth-child(2) .metric-icon{background:rgba(0,212,255,.1);color:var(--cyan)}
+    .metric-card:nth-child(3) .metric-icon{background:rgba(255,140,66,.1);color:var(--orange)}
+    .metric-card:nth-child(4) .metric-icon{background:rgba(168,85,247,.1);color:var(--purple)}
+    .metric-icon svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2; }
+    .metric-change { font-family:'DM Mono',monospace; font-size:.72rem; font-weight:500; padding:3px 8px; border-radius:6px; }
+    .metric-change.up{color:var(--accent);background:rgba(0,245,160,.1)}
+    .metric-change.down{color:var(--red);background:rgba(255,71,87,.1)}
+    .metric-value { font-family:'Syne',sans-serif; font-weight:700; font-size:1.8rem; letter-spacing:-.03em; margin-bottom:4px; transition:all .4s ease; }
+    .metric-label { font-size:.8rem; color:var(--text-muted); }
+
+    /* ─── Charts ─── */
+    .charts-row { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:28px; }
+    .chart-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; animation:fadeUp .5s ease both; animation-delay:.3s; }
+    .chart-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:12px; flex-wrap:wrap; }
+    .chart-card-title { font-family:'Syne',sans-serif; font-weight:600; font-size:1rem; }
+    .chart-tabs { display:flex; gap:4px; background:var(--bg-elevated); border-radius:var(--radius-sm); padding:3px; }
+    .chart-tab { font-family:'DM Mono',monospace; font-size:.72rem; padding:5px 12px; border-radius:6px; cursor:pointer; color:var(--text-muted); transition:var(--transition); border:none; background:transparent; }
+    .chart-tab.active { background:var(--bg-card); color:var(--text-primary); box-shadow:0 1px 4px rgba(0,0,0,.2); }
+    .chart-container { position:relative; height:260px; width:100%; }
+    .donut-container { position:relative; height:200px; width:100%; }
+    .donut-legend { margin-top:16px; display:flex; flex-direction:column; gap:8px; }
+    .legend-item { display:flex; align-items:center; gap:8px; font-size:.8rem; }
+    .legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .legend-label { color:var(--text-secondary); flex:1; }
+    .legend-value { font-family:'DM Mono',monospace; font-weight:500; font-size:.78rem; }
+
+    /* ─── Table ─── */
+    .table-section { margin-bottom:28px; animation:fadeUp .5s ease both; animation-delay:.4s; }
+    .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap; }
+    .section-title { font-family:'Syne',sans-serif; font-weight:600; font-size:1.1rem; }
+    .section-action { font-family:'DM Mono',monospace; font-size:.78rem; color:var(--accent); cursor:pointer; padding:6px 14px; border:1px solid rgba(0,245,160,.2); border-radius:var(--radius-sm); background:transparent; transition:var(--transition); }
+    .section-action:hover { background:var(--accent-glow); border-color:var(--accent-dim); }
+    .section-action:active { transform:scale(.97); }
+    .data-table-wrapper { width:100%; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-card); position:relative; }
+    .data-table { width:100%; border-collapse:collapse; min-width:720px; }
+    .data-table thead th { font-family:'DM Mono',monospace; font-size:.72rem; font-weight:500; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; text-align:left; padding:14px 20px; border-bottom:1px solid var(--border); background:var(--bg-surface); white-space:nowrap; }
+    .data-table tbody tr { transition:var(--transition); cursor:pointer; }
+    .data-table tbody tr:hover { background:var(--bg-card-hover); }
+    .data-table tbody tr.hidden { display:none; }
+    .data-table tbody td { padding:14px 20px; border-bottom:1px solid var(--border); font-size:.85rem; vertical-align:middle; white-space:nowrap; }
+    .data-table tbody tr:last-child td { border-bottom:none; }
+    .empty-row td { text-align:center; color:var(--text-muted); padding:32px; font-style:italic; }
+    .product-cell { display:flex; align-items:center; gap:12px; }
+    .product-img { width:40px; height:40px; border-radius:var(--radius-sm); background:var(--bg-elevated); display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+    .product-info-name { font-weight:500; color:var(--text-primary); margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+    .product-info-cat { font-size:.75rem; color:var(--text-muted); }
+    .sales-bar-cell { min-width:160px; }
+    .sales-bar-wrap { display:flex; align-items:center; gap:10px; }
+    .sales-bar { flex:1; height:6px; background:var(--bg-elevated); border-radius:3px; overflow:hidden; }
+    .sales-bar-inner { height:100%; width:0; border-radius:3px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+    .sales-bar-val { font-family:'DM Mono',monospace; font-size:.78rem; min-width:40px; text-align:right; }
+    .price-tag { font-family:'DM Mono',monospace; font-weight:500; color:var(--accent); }
+    .opportunity-badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; font-family:'DM Mono',monospace; font-size:.72rem; font-weight:500; }
+    .opportunity-badge.high{background:rgba(0,245,160,.1);color:var(--accent)}
+    .opportunity-badge.medium{background:rgba(251,191,36,.1);color:var(--yellow)}
+    .opportunity-badge.low{background:rgba(255,71,87,.1);color:var(--red)}
+    .opportunity-badge::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .trend-indicator { display:inline-flex; align-items:center; gap:4px; font-family:'DM Mono',monospace; font-size:.78rem; }
+    .trend-indicator.up{color:var(--accent)} .trend-indicator.down{color:var(--red)} .trend-indicator.flat{color:var(--text-muted)}
+    .trend-indicator svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; }
+
+    /* Table loading skeleton */
+    .table-loading-row td { padding:18px 20px; }
+    .skel { height:14px; border-radius:4px; background:linear-gradient(90deg,var(--bg-elevated) 25%,var(--border-light) 50%,var(--bg-elevated) 75%); background-size:400% 100%; animation:shimmer 1.4s ease infinite; }
+    @keyframes shimmer { to { background-position:-400% 0; } }
+
+    /* ─── Bottom grid ─── */
+    .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:28px; }
+    .competitor-card,.opportunity-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; animation:fadeUp .5s ease both; animation-delay:.5s; }
+    .competitor-list,.opportunity-list { display:flex; flex-direction:column; gap:12px; margin-top:16px; }
+    .competitor-item { display:flex; align-items:center; gap:14px; padding:12px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); transition:var(--transition); cursor:pointer; }
+    .competitor-item:hover { border-color:var(--border-light); background:var(--bg-elevated); transform:translateX(2px); }
+    .competitor-avatar { width:42px; height:42px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.9rem; flex-shrink:0; }
+    .competitor-info { flex:1; min-width:0; }
+    .competitor-name { font-weight:500; font-size:.88rem; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .competitor-meta { font-size:.75rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:12px; }
+    .competitor-stats { text-align:right; flex-shrink:0; }
+    .competitor-revenue { font-family:'DM Mono',monospace; font-weight:500; font-size:.88rem; color:var(--accent); margin-bottom:2px; }
+    .competitor-products { font-size:.72rem; color:var(--text-muted); }
+    .opp-item { display:flex; align-items:center; gap:14px; padding:14px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); transition:var(--transition); cursor:pointer; }
+    .opp-item:hover { border-color:var(--accent-dim); box-shadow:0 0 0 3px var(--accent-glow); }
+    .opp-score { width:48px; height:48px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:700; font-size:1.1rem; flex-shrink:0; }
+    .opp-score.hot{background:rgba(0,245,160,.12);color:var(--accent);border:1px solid rgba(0,245,160,.2)}
+    .opp-score.warm{background:rgba(251,191,36,.12);color:var(--yellow);border:1px solid rgba(251,191,36,.2)}
+    .opp-score.cool{background:rgba(0,212,255,.12);color:var(--cyan);border:1px solid rgba(0,212,255,.2)}
+    .opp-info { flex:1; min-width:0; }
+    .opp-name { font-weight:500; font-size:.88rem; margin-bottom:3px; }
+    .opp-detail { font-size:.75rem; color:var(--text-muted); }
+    .opp-supplier { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--cyan); padding:3px 8px; background:rgba(0,212,255,.08); border-radius:4px; flex-shrink:0; }
+
+    /* ─── Suppliers ─── */
+    .supplier-section { margin-bottom:28px; animation:fadeUp .5s ease both; animation-delay:.6s; }
+    .supplier-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px; }
+    .supplier-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; transition:var(--transition); cursor:pointer; }
+    .supplier-card:hover { border-color:var(--cyan-dim); transform:translateY(-2px); box-shadow:var(--shadow); }
+    .supplier-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+    .supplier-flag { font-size:1.5rem; }
+    .supplier-name-wrap { flex:1; min-width:0; }
+    .supplier-name { font-weight:500; font-size:.88rem; margin-bottom:2px; }
+    .supplier-platform { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--text-muted); }
+    .supplier-rating { color:var(--yellow); font-size:.78rem; }
+    .supplier-stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+    .supplier-stat-label { font-size:.7rem; color:var(--text-muted); margin-bottom:2px; }
+    .supplier-stat-value { font-family:'DM Mono',monospace; font-weight:500; font-size:.85rem; }
+    .supplier-match { display:flex; align-items:center; gap:6px; padding:8px 12px; background:rgba(0,245,160,.06); border:1px solid rgba(0,245,160,.12); border-radius:var(--radius-sm); font-family:'DM Mono',monospace; font-size:.75rem; color:var(--accent); }
+    .supplier-match svg { width:14px; height:14px; stroke:var(--accent); fill:none; stroke-width:2; flex-shrink:0; }
+
+    /* ─── Alerts ─── */
+    .alerts-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:28px; animation:fadeUp .5s ease both; animation-delay:.7s; }
+    .alert-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+    .alert-item { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+    .alert-item:last-child { border-bottom:none; }
+    .alert-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+    .alert-dot.red{background:var(--red);box-shadow:0 0 8px rgba(255,71,87,.4)}
+    .alert-dot.green{background:var(--accent);box-shadow:0 0 8px rgba(0,245,160,.4)}
+    .alert-dot.orange{background:var(--orange);box-shadow:0 0 8px rgba(255,140,66,.4)}
+    .alert-content { flex:1; min-width:0; }
+    .alert-title { font-weight:500; font-size:.85rem; margin-bottom:3px; }
+    .alert-desc { font-size:.78rem; color:var(--text-muted); }
+    .alert-time { font-family:'DM Mono',monospace; font-size:.68rem; color:var(--text-muted); flex-shrink:0; }
+
+    /* ─── Niche Modal ─── */
+    .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; align-items:center; justify-content:center; }
+    .modal-backdrop.open { display:flex; }
+    .modal { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius); padding:28px; width:90%; max-width:560px; max-height:80vh; overflow-y:auto; }
+    .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .modal-title { font-family:'Syne',sans-serif; font-weight:600; font-size:1.1rem; }
+    .modal-close { background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:1.4rem; line-height:1; }
+    .modal-close:hover { color:var(--text-primary); }
+    .modal-form { display:flex; flex-direction:column; gap:12px; margin-bottom:20px; }
+    .modal-form label { font-size:.8rem; color:var(--text-muted); margin-bottom:4px; display:block; }
+    .modal-form input, .modal-form select { width:100%; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 14px; color:var(--text-primary); font-size:.88rem; font-family:'Inter',sans-serif; outline:none; transition:var(--transition); }
+    .modal-form input:focus, .modal-form select:focus { border-color:var(--accent-dim); box-shadow:0 0 0 3px var(--accent-glow); }
+    .modal-form select option { background:var(--bg-surface); }
+    .modal-result { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px; font-size:.85rem; line-height:1.8; min-height:60px; }
+    .modal-result.loading { color:var(--text-muted); font-style:italic; }
+    .modal-result-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .modal-stat { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; }
+    .modal-stat-label { font-size:.72rem; color:var(--text-muted); margin-bottom:3px; }
+    .modal-stat-value { font-family:'DM Mono',monospace; font-weight:500; font-size:.9rem; }
+
+    /* ─── Toast ─── */
+    .toast { position:fixed; bottom:24px; right:24px; background:var(--bg-elevated); border:1px solid var(--accent-dim); color:var(--text-primary); padding:12px 18px; border-radius:var(--radius-sm); font-size:.85rem; box-shadow:var(--shadow-lg); z-index:10000; opacity:0; transform:translateY(20px); transition:opacity .3s,transform .3s; pointer-events:none; display:flex; align-items:center; gap:8px; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast .toast-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); }
+
+    /* ─── Animations ─── */
+    @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .live-dot { width:6px; height:6px; background:var(--accent); border-radius:50%; animation:pulse 2s ease infinite; display:inline-block; }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }
+
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border-light); border-radius:3px; }
+
+    @media (max-width:1200px) { .metrics-grid{grid-template-columns:repeat(2,1fr)} .charts-row{grid-template-columns:1fr} .bottom-grid{grid-template-columns:1fr} .supplier-grid{grid-template-columns:1fr 1fr} .alerts-row{grid-template-columns:1fr} }
+    @media (max-width:992px) { .app{grid-template-columns:1fr} .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:100;transform:translateX(-100%);width:260px} .sidebar.open{transform:translateX(0)} .menu-toggle{display:inline-flex} }
+    @media (max-width:576px) { .metrics-grid{grid-template-columns:1fr} .supplier-grid{grid-template-columns:1fr} .main{padding:16px} .topbar{flex-direction:column;align-items:flex-start} .topbar-right{width:100%;flex-wrap:wrap} .search-box{flex:1;min-width:160px} }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div id="sidebarOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="logo"><div class="logo-icon">MR</div><div class="logo-text">ML<span>Radar</span></div></div>
+    <nav class="nav-section">
+      <div class="nav-label">Principal</div>
+      <button class="nav-item active" data-route="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>Dashboard</button>
+      <button class="nav-item" data-route="explorar"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></span>Explorar Produtos</button>
+      <button class="nav-item" data-route="concorrentes"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span>Concorrentes<span class="nav-badge">12</span></button>
+      <button class="nav-item" data-route="tendencias"><span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>Tendências</button>
+    </nav>
+    <nav class="nav-section">
+      <div class="nav-label">Inteligência</div>
+      <button class="nav-item" data-route="oportunidades" id="navOportunidades"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>Oportunidades<span class="nav-badge badge-orange">5</span></button>
+      <button class="nav-item" data-route="fornecedores"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></span>Fornecedores</button>
+      <button class="nav-item" data-route="alertas"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alertas<span class="nav-badge badge-red">3</span></button>
+    </nav>
+    <nav class="nav-section">
+      <div class="nav-label">Sistema</div>
+      <button class="nav-item" data-route="relatorios"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>Relatórios</button>
+      <button class="nav-item" data-route="config"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>Configurações</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="plan-card">
+        <div class="plan-name">Plano Pro</div>
+        <div class="plan-desc">6.700 de 10.000 consultas/mês</div>
+        <div class="plan-bar"><div class="plan-bar-fill" id="planBarFill"></div></div>
+        <div class="plan-usage">67% utilizado · renova em 12 dias</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title-row">
+          <button class="menu-toggle" id="menuBtn" aria-label="Abrir menu"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <p><span class="live-dot"></span>Mercado Livre Brasil — <button id="apiBadge" class="api-badge loading" title="Clique para reconectar">⟳ Conectando...</button></p>
+      </div>
+      <div class="topbar-right">
+        <div class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="searchInput" placeholder="Buscar produto no ML em tempo real..." aria-label="Buscar"></div>
+        <button class="topbar-btn" aria-label="Analisar nicho" id="btnNiche" title="Análise de nicho"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></button>
+        <button class="topbar-btn" aria-label="Alertas" data-action="notifications"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><div class="dot"></div></button>
+        <div class="avatar" title="Perfil">JP</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-header"><div class="metric-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div class="metric-change up" id="mc0">+23.5%</div></div><div class="metric-value" id="mv0">R$ 2.4M</div><div class="metric-label">Receita estimada monitorada</div></div>
+      <div class="metric-card"><div class="metric-header"><div class="metric-icon"><svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div><div class="metric-change up" id="mc1">+847</div></div><div class="metric-value" id="mv1">14.832</div><div class="metric-label">Produtos rastreados</div></div>
+      <div class="metric-card"><div class="metric-header"><div class="metric-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><div class="metric-change up" id="mc2">+3</div></div><div class="metric-value" id="mv2">286</div><div class="metric-label">Concorrentes ativos</div></div>
+      <div class="metric-card"><div class="metric-header"><div class="metric-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="metric-change up">+5 novos</div></div><div class="metric-value" id="mv3">47</div><div class="metric-label">Oportunidades de nicho</div></div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-card-header"><div class="chart-card-title">Volume de Vendas por Categoria</div><div class="chart-tabs" role="tablist"><button class="chart-tab active" data-period="7d">7d</button><button class="chart-tab" data-period="30d">30d</button><button class="chart-tab" data-period="90d">90d</button></div></div>
+        <div class="chart-container"><canvas id="salesChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-header"><div class="chart-card-title">Distribuição por Nicho</div></div>
+        <div class="donut-container"><canvas id="donutChart"></canvas></div>
+        <div class="donut-legend" id="donutLegend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div><span class="legend-label">Eletrônicos</span><span class="legend-value" id="dl0">34%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div><span class="legend-label">Casa &amp; Decoração</span><span class="legend-value" id="dl1">22%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div><span class="legend-label">Esportes</span><span class="legend-value" id="dl2">19%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div><span class="legend-label">Beleza</span><span class="legend-value" id="dl3">14%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div><span class="legend-label">Outros</span><span class="legend-value" id="dl4">11%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-section">
+      <div class="section-header"><div class="section-title">Produtos com Maior Volume de Vendas</div><button class="section-action" id="exportCsvBtn">Exportar CSV</button></div>
+      <div class="data-table-wrapper">
+        <table class="data-table" id="productsTable">
+          <thead><tr><th>Produto</th><th>Vendas (30d)</th><th>Preço</th><th>Receita Est.</th><th>Tendência</th><th>Oportunidade</th></tr></thead>
+          <tbody id="productsTbody">
+            <tr data-search="capa silicone iphone 15 pro max magsafe eletronicos acessorios celular">
+              <td><div class="product-cell"><div class="product-img">📱</div><div><div class="product-info-name">Capa Silicone iPhone 15 Pro Max MagSafe</div><div class="product-info-cat">Eletrônicos &gt; Acessórios Celular</div></div></div></td>
+              <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" data-width="95" style="background:var(--accent)"></div></div><span class="sales-bar-val">4.832</span></div></td>
+              <td><span class="price-tag">R$ 49,90</span></td><td><span class="price-tag">R$ 241.117</span></td>
+              <td><div class="trend-indicator up"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>+32%</div></td>
+              <td><span class="opportunity-badge high">Score 92</span></td>
+            </tr>
+            <tr data-search="fone bluetooth tws pro 6 led display eletronicos fones ouvido">
+              <td><div class="product-cell"><div class="product-img">🎧</div><div><div class="product-info-name">Fone Bluetooth TWS Pro 6 LED Display</div><div class="product-info-cat">Eletrônicos &gt; Fones de Ouvido</div></div></div></td>
+              <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" data-width="82" style="background:var(--accent)"></div></div><span class="sales-bar-val">3.917</span></div></td>
+              <td><span class="price-tag">R$ 79,90</span></td><td><span class="price-tag">R$ 312.971</span></td>
+              <td><div class="trend-indicator up"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>+58%</div></td>
+              <td><span class="opportunity-badge high">Score 88</span></td>
+            </tr>
+            <tr data-search="kit elastico resistencia musculacao 5 niveis esportes fitness">
+              <td><div class="product-cell"><div class="product-img">🏋️</div><div><div class="product-info-name">Kit Elástico Resistência Musculação 5 níveis</div><div class="product-info-cat">Esportes &gt; Fitness</div></div></div></td>
+              <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" data-width="71" style="background:var(--cyan)"></div></div><span class="sales-bar-val">3.204</span></div></td>
+              <td><span class="price-tag">R$ 39,90</span></td><td><span class="price-tag">R$ 127.840</span></td>
+              <td><div class="trend-indicator up"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>+12%</div></td>
+              <td><span class="opportunity-badge medium">Score 74</span></td>
+            </tr>
+            <tr data-search="luminaria led rgb gamer monitor bar eletronicos iluminacao">
+              <td><div class="product-cell"><div class="product-img">💡</div><div><div class="product-info-name">Luminária LED RGB Gamer Monitor Bar</div><div class="product-info-cat">Eletrônicos &gt; Iluminação</div></div></div></td>
+              <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" data-width="63" style="background:var(--orange)"></div></div><span class="sales-bar-val">2.841</span></div></td>
+              <td><span class="price-tag">R$ 129,90</span></td><td><span class="price-tag">R$ 369.126</span></td>
+              <td><div class="trend-indicator up"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>+41%</div></td>
+              <td><span class="opportunity-badge high">Score 85</span></td>
+            </tr>
+            <tr data-search="serum vitamina c 30ml anti-manchas saude beleza skincare">
+              <td><div class="product-cell"><div class="product-img">🧴</div><div><div class="product-info-name">Sérum Vitamina C 30ml Anti-manchas</div><div class="product-info-cat">Saúde &amp; Beleza &gt; Skincare</div></div></div></td>
+              <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" data-width="55" style="background:var(--purple)"></div></div><span class="sales-bar-val">2.456</span></div></td>
+              <td><span class="price-tag">R$ 59,90</span></td><td><span class="price-tag">R$ 147.114</span></td>
+              <td><div class="trend-indicator flat"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>+2%</div></td>
+              <td><span class="opportunity-badge low">Score 45</span></td>
+            </tr>
+            <tr data-search="organizador gaveteiro tecido 6 cubos casa organizacao">
+              <td><div class="product-cell"><div class="product-img">🏠</div><div><div class="product-info-name">Organizador Gaveteiro Tecido 6 Cubos</div><div class="product-info-cat">Casa &amp; Organização</div></div></div></td>
+              <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" data-width="48" style="background:var(--yellow)"></div></div><span class="sales-bar-val">2.130</span></div></td>
+              <td><span class="price-tag">R$ 69,90</span></td><td><span class="price-tag">R$ 148.887</span></td>
+              <td><div class="trend-indicator down"><svg viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>-8%</div></td>
+              <td><span class="opportunity-badge low">Score 38</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bottom-grid">
+      <div class="competitor-card">
+        <div class="chart-card-header"><div class="chart-card-title">Top Concorrentes</div><button class="section-action" data-action="view-competitors">Ver todos</button></div>
+        <div class="competitor-list">
+          <div class="competitor-item"><div class="competitor-avatar" style="background:linear-gradient(135deg,#00f5a0,#00d4ff);color:var(--bg-deep)">TM</div><div class="competitor-info"><div class="competitor-name">TechMax Store</div><div class="competitor-meta"><span>⭐ 4.9 · MercadoLíder Platinum</span><span>3.2k vendas/mês</span></div></div><div class="competitor-stats"><div class="competitor-revenue">R$ 312K/mês</div><div class="competitor-products">187 produtos</div></div></div>
+          <div class="competitor-item"><div class="competitor-avatar" style="background:linear-gradient(135deg,#ff8c42,#ff4757);color:white">CA</div><div class="competitor-info"><div class="competitor-name">Casa Express</div><div class="competitor-meta"><span>⭐ 4.8 · MercadoLíder Gold</span><span>2.8k vendas/mês</span></div></div><div class="competitor-stats"><div class="competitor-revenue">R$ 248K/mês</div><div class="competitor-products">94 produtos</div></div></div>
+          <div class="competitor-item"><div class="competitor-avatar" style="background:linear-gradient(135deg,#a855f7,#6366f1);color:white">FM</div><div class="competitor-info"><div class="competitor-name">FitMove Brasil</div><div class="competitor-meta"><span>⭐ 4.7 · MercadoLíder Gold</span><span>1.9k vendas/mês</span></div></div><div class="competitor-stats"><div class="competitor-revenue">R$ 156K/mês</div><div class="competitor-products">63 produtos</div></div></div>
+          <div class="competitor-item"><div class="competitor-avatar" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:var(--bg-deep)">GB</div><div class="competitor-info"><div class="competitor-name">Glamour Beauty Store</div><div class="competitor-meta"><span>⭐ 4.6 · MercadoLíder</span><span>1.4k vendas/mês</span></div></div><div class="competitor-stats"><div class="competitor-revenue">R$ 98K/mês</div><div class="competitor-products">211 produtos</div></div></div>
+        </div>
+      </div>
+      <div class="opportunity-card">
+        <div class="chart-card-header"><div class="chart-card-title">Oportunidades de Nicho</div><button class="section-action" id="btnAnalyzeAll">Analisar todas</button></div>
+        <div class="opportunity-list" id="oppList">
+          <div class="opp-item"><div class="opp-score hot">95</div><div class="opp-info"><div class="opp-name">Mini Projetor Portátil WiFi 4K</div><div class="opp-detail">Alta demanda (8.2k buscas/mês) · Apenas 12 sellers nota 4+</div></div><div class="opp-supplier">AliExpress ~R$180</div></div>
+          <div class="opp-item"><div class="opp-score hot">91</div><div class="opp-info"><div class="opp-name">Purificador Água Portátil UV</div><div class="opp-detail">Tendência +340% · Nicho sem líder dominante</div></div><div class="opp-supplier">Alibaba ~R$65</div></div>
+          <div class="opp-item"><div class="opp-score warm">78</div><div class="opp-info"><div class="opp-name">Câmera IP 360° Baby Monitor</div><div class="opp-detail">Ticket médio R$189 · Margem estimada 45%</div></div><div class="opp-supplier">AliExpress ~R$72</div></div>
+          <div class="opp-item"><div class="opp-score warm">72</div><div class="opp-info"><div class="opp-name">Organizador Bancada Acrílico LED</div><div class="opp-detail">Crescimento sustentado · Baixa barreira de entrada</div></div><div class="opp-supplier">Alibaba ~R$28</div></div>
+          <div class="opp-item"><div class="opp-score cool">65</div><div class="opp-info"><div class="opp-name">Ventilador Mini USB Turbo</div><div class="opp-detail">Sazonal (verão) · Volume alto, margem apertada</div></div><div class="opp-supplier">1688 ~R$12</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="supplier-section">
+      <div class="section-header"><div class="section-title">Fornecedores Sugeridos (Alibaba / AliExpress)</div><button class="section-action" data-action="view-suppliers">Ver catálogo completo</button></div>
+      <div class="supplier-grid">
+        <div class="supplier-card"><div class="supplier-header"><div class="supplier-flag">🇨🇳</div><div class="supplier-name-wrap"><div class="supplier-name">Shenzhen TechParts Co.</div><div class="supplier-platform">Alibaba · Ouro Verificado 5 anos</div></div><div class="supplier-rating">⭐ 4.8</div></div><div class="supplier-stats"><div><div class="supplier-stat-label">Preço médio</div><div class="supplier-stat-value" style="color:var(--accent)">R$ 18,50</div></div><div><div class="supplier-stat-label">MOQ</div><div class="supplier-stat-value">100 un.</div></div><div><div class="supplier-stat-label">Lead time</div><div class="supplier-stat-value">15-20 dias</div></div><div><div class="supplier-stat-label">Margem</div><div class="supplier-stat-value" style="color:var(--accent)">58%</div></div></div><div class="supplier-match"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Match: Capas, Fones, Tech</div></div>
+        <div class="supplier-card"><div class="supplier-header"><div class="supplier-flag">🇨🇳</div><div class="supplier-name-wrap"><div class="supplier-name">Yiwu HomeStar Trading</div><div class="supplier-platform">1688 · Fábrica Direta</div></div><div class="supplier-rating">⭐ 4.6</div></div><div class="supplier-stats"><div><div class="supplier-stat-label">Preço médio</div><div class="supplier-stat-value" style="color:var(--accent)">R$ 9,80</div></div><div><div class="supplier-stat-label">MOQ</div><div class="supplier-stat-value">500 un.</div></div><div><div class="supplier-stat-label">Lead time</div><div class="supplier-stat-value">20-30 dias</div></div><div><div class="supplier-stat-label">Margem</div><div class="supplier-stat-value" style="color:var(--accent)">72%</div></div></div><div class="supplier-match"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Match: Casa, Organização</div></div>
+        <div class="supplier-card"><div class="supplier-header"><div class="supplier-flag">🇨🇳</div><div class="supplier-name-wrap"><div class="supplier-name">Guangzhou Beauty Direct</div><div class="supplier-platform">AliExpress · Envio Local BR</div></div><div class="supplier-rating">⭐ 4.7</div></div><div class="supplier-stats"><div><div class="supplier-stat-label">Preço médio</div><div class="supplier-stat-value" style="color:var(--accent)">R$ 14,20</div></div><div><div class="supplier-stat-label">MOQ</div><div class="supplier-stat-value">50 un.</div></div><div><div class="supplier-stat-label">Lead time</div><div class="supplier-stat-value">7-12 dias</div></div><div><div class="supplier-stat-label">Margem</div><div class="supplier-stat-value" style="color:var(--accent)">63%</div></div></div><div class="supplier-match"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Match: Skincare, Beleza</div></div>
+      </div>
+    </div>
+
+    <div class="alerts-row">
+      <div class="alert-card">
+        <div class="chart-card-header"><div class="chart-card-title">Alertas de Preço</div></div>
+        <div class="alert-item"><div class="alert-dot red"></div><div class="alert-content"><div class="alert-title">Queda de preço — TechMax Store</div><div class="alert-desc">Fone TWS Pro caiu de R$89,90 para R$69,90 (-22%)</div></div><div class="alert-time">12min</div></div>
+        <div class="alert-item"><div class="alert-dot orange"></div><div class="alert-content"><div class="alert-title">Estoque baixo — concorrente</div><div class="alert-desc">Luminária Gamer RGB de Casa Express com 3 unidades restantes</div></div><div class="alert-time">2h</div></div>
+        <div class="alert-item"><div class="alert-dot green"></div><div class="alert-content"><div class="alert-title">Novo produto no nicho</div><div class="alert-desc">Mini Projetor 4K — 5 novos anúncios apareceram hoje</div></div><div class="alert-time">4h</div></div>
+        <div class="alert-item"><div class="alert-dot red"></div><div class="alert-content"><div class="alert-title">Queda de reputação</div><div class="alert-desc">NovaEletr Store caiu de Platinum para Gold (reclamações ↑)</div></div><div class="alert-time">6h</div></div>
+      </div>
+      <div class="alert-card">
+        <div class="chart-card-header"><div class="chart-card-title" id="trendsTitle">Tendências Emergentes</div></div>
+        <div id="trendsContainer">
+          <div class="alert-item"><div class="alert-dot green"></div><div class="alert-content"><div class="alert-title">🔥 Purificador UV portátil</div><div class="alert-desc">+340% buscas nos últimos 14 dias · Poucos sellers premium</div></div><div class="alert-time">Novo</div></div>
+          <div class="alert-item"><div class="alert-dot green"></div><div class="alert-content"><div class="alert-title">📈 Acessórios Nintendo Switch 2</div><div class="alert-desc">Pré-venda anunciada — antecipação de demanda</div></div><div class="alert-time">Hoje</div></div>
+          <div class="alert-item"><div class="alert-dot orange"></div><div class="alert-content"><div class="alert-title">⚠️ Borracha ecológica escolar</div><div class="alert-desc">Volta às aulas em 30 dias — oportunidade sazonal</div></div><div class="alert-time">Sazonal</div></div>
+          <div class="alert-item"><div class="alert-dot green"></div><div class="alert-content"><div class="alert-title">🧊 Mini geladeira portátil USB</div><div class="alert-desc">Tendência de verão +180% · Margem de 65% estimada</div></div><div class="alert-time">Emergente</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal análise de nicho -->
+<div class="modal-backdrop" id="nicheModal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Análise de Nicho em Tempo Real</div><button class="modal-close" id="modalClose">✕</button></div>
+    <div class="modal-form">
+      <div><label for="nicheQuery">Palavra-chave ou produto</label><input type="text" id="nicheQuery" placeholder="ex: fone bluetooth, purificador, capa iphone"></div>
+      <div><label for="nicheCategory">Categoria (opcional)</label>
+        <select id="nicheCategory">
+          <option value="">Todas as categorias</option>
+          <option value="MLB1051">Celulares e Smartphones</option>
+          <option value="MLB1000">Eletrônicos</option>
+          <option value="MLB1574">Esportes e Fitness</option>
+          <option value="MLB1499">Beleza e Cuidado Pessoal</option>
+          <option value="MLB1246">Moda Feminina</option>
+          <option value="MLB1276">Casa e Decoração</option>
+        </select>
+      </div>
+      <button class="section-action" id="btnRunNiche" style="align-self:flex-start">▶ Analisar agora</button>
+    </div>
+    <div class="modal-result loading" id="nicheResult">Preencha os campos e clique em Analisar.</div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"><div class="toast-dot"></div><span id="toastMsg">OK</span></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+  // ═══════════════════════════════════════════════════════
+  // API Layer — chama ML API diretamente do browser
+  // (evita bloqueio de IP em servidores cloud)
+  // ═══════════════════════════════════════════════════════
+  const ML_BASE = 'https://api.mercadolibre.com';
+  const ML_SITE = 'MLB';
+  const BACKEND = (window.location.port === '8000' || window.location.hostname === 'localhost')
+    ? 'http://localhost:8000/api' : '/api';
+
+  let apiConnected = false;
+
+  // Busca diretamente na ML API (browser não é bloqueado)
+  async function mlGet(path, params = {}) {
+    const url = new URL(ML_BASE + path);
+    Object.entries(params).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) url.searchParams.set(k, v); });
+    const r = await fetch(url.toString(), {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!r.ok) throw new Error(`ML API ${r.status}`);
+    return r.json();
+  }
+
+  // Chama o backend (para health, cache, niche-analysis, etc)
+  async function apiGet(path, params = {}) {
+    const url = new URL(BACKEND + path, window.location.href);
+    Object.entries(params).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) url.searchParams.set(k, v); });
+    const r = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.detail || `HTTP ${r.status}`); }
+    return r.json();
+  }
+
+  function updateApiBadge(state) {
+    const b = document.getElementById('apiBadge');
+    if (!b) return;
+    if (state === 'connected') { b.textContent = '● API Real · MLB'; b.className = 'api-badge connected'; }
+    else if (state === 'loading') { b.textContent = '⟳ Conectando...'; b.className = 'api-badge loading'; }
+    else { b.textContent = '○ Modo Demo'; b.className = 'api-badge disconnected'; }
+  }
+
+  document.getElementById('apiBadge').addEventListener('click', () => initApp());
+
+  // ═══════════════════════════════════════════════════════
+  // Init
+  // ═══════════════════════════════════════════════════════
+  async function initApp() {
+    updateApiBadge('loading');
+    try {
+      // Testa ML API diretamente do browser
+      await mlGet(`/sites/${ML_SITE}/categories`);
+      apiConnected = true;
+      updateApiBadge('connected');
+      showToast('Conectado à API do Mercado Livre');
+      await Promise.allSettled([loadDashboardMetrics(), loadTrends()]);
+    } catch (e) {
+      apiConnected = false;
+      updateApiBadge('disconnected');
+      console.warn('ML API indisponível:', e.message);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Dashboard metrics (dados reais)
+  // ═══════════════════════════════════════════════════════
+  async function loadDashboardMetrics() {
+    // Busca direto da ML API do browser
+    const cats = [
+      {id:'MLB1051',name:'Celulares'},{id:'MLB1000',name:'Eletrônicos'},
+      {id:'MLB1574',name:'Esportes'},{id:'MLB1499',name:'Beleza'}
+    ];
+    try {
+      const results = await Promise.allSettled(
+        cats.map(c => mlGet(`/sites/${ML_SITE}/search`, {category: c.id, limit:20, sort:'sold_quantity'}))
+      );
+      let totalRev = 0, totalList = 0;
+      const categories = results.map((r, i) => {
+        if (r.status !== 'fulfilled') return {name:cats[i].name, revenue:0, listings:0};
+        const items = r.value.results || [];
+        const rev = items.reduce((s,x) => s + (x.price||0)*(x.sold_quantity||0), 0);
+        const listings = r.value.paging?.total || 0;
+        totalRev += rev; totalList += listings;
+        return {name: cats[i].name, revenue: rev, listings};
+      });
+      const data = {
+        estimated_revenue: totalRev,
+        estimated_revenue_fmt: 'R$ ' + totalRev.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+        tracked_products: totalList,
+        active_competitors: Math.min(totalList * 3, 999),
+        categories
+      };
+    const animate = (el, val) => {
+      if (!el || !val) return;
+      el.style.opacity = '0'; el.style.transform = 'translateY(-8px)';
+      setTimeout(() => { el.textContent = val; el.style.opacity = '1'; el.style.transform = 'translateY(0)'; el.style.transition = 'opacity .4s, transform .4s'; }, 120);
+    };
+      if (data.estimated_revenue_fmt) animate(document.getElementById('mv0'), data.estimated_revenue_fmt);
+      if (data.tracked_products)     animate(document.getElementById('mv1'), Number(data.tracked_products).toLocaleString('pt-BR'));
+      if (data.active_competitors)   animate(document.getElementById('mv2'), Number(data.active_competitors).toLocaleString('pt-BR'));
+      if (data.categories && data.categories.length >= 2) {
+        const total = data.categories.reduce((s, c) => s + c.revenue, 0) || 1;
+        const ids = ['dl0','dl1','dl2','dl3','dl4'];
+        data.categories.forEach((cat, i) => {
+          const el = document.getElementById(ids[i]);
+          if (el) el.textContent = Math.round(cat.revenue / total * 100) + '%';
+        });
+      }
+    } catch(e) { console.warn('Dashboard metrics:', e.message); }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Trends (dados reais do ML)
+  // ═══════════════════════════════════════════════════════
+  async function loadTrends() {
+    const trends = await mlGet(`/trends/${ML_SITE}`);
+    if (!Array.isArray(trends) || trends.length === 0) return;
+    const container = document.getElementById('trendsContainer');
+    const title = document.getElementById('trendsTitle');
+    if (title) title.textContent = '🔥 Em alta agora — ML Brasil';
+    const colors = ['green','green','orange','green','green','green','orange','green'];
+    const items = trends.slice(0, 5).map((t, i) => {
+      const kw = (t.keyword || t.subject || JSON.stringify(t)).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      return `<div class="alert-item"><div class="alert-dot ${colors[i%colors.length]}"></div><div class="alert-content"><div class="alert-title">${kw}</div><div class="alert-desc">Em alta no Mercado Livre agora</div></div><div class="alert-time">Agora</div></div>`;
+    }).join('');
+    container.innerHTML = items;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Busca em tempo real
+  // ═══════════════════════════════════════════════════════
+  const ESC = s => (s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const EMOJI_MAP = {'MLB1051':'📱','MLB1000':'💻','MLB1574':'🏋️','MLB1499':'🧴','MLB1246':'👗','MLB1276':'🏠','MLB2521':'🎧','MLB3743':'💡'};
+
+  function showTableSkeleton() {
+    const tbody = document.getElementById('productsTbody');
+    tbody.innerHTML = Array(5).fill(`<tr class="table-loading-row"><td><div class="skel" style="width:200px"></div></td><td><div class="skel" style="width:120px"></div></td><td><div class="skel" style="width:70px"></div></td><td><div class="skel" style="width:90px"></div></td><td><div class="skel" style="width:50px"></div></td><td><div class="skel" style="width:80px"></div></td></tr>`).join('');
+  }
+
+  function renderApiProducts(products, total, query) {
+    const tbody = document.getElementById('productsTbody');
+    tbody.innerHTML = '';
+    if (!products || products.length === 0) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Nenhum produto encontrado para "<strong>${ESC(query)}</strong>" na API do ML</td></tr>`;
+      return;
+    }
+    const maxSold = Math.max(...products.map(p => p.sold_quantity || 0), 1);
+    const barColors = ['var(--accent)','var(--cyan)','var(--orange)','var(--purple)','var(--yellow)'];
+    products.forEach((p, idx) => {
+      const soldW = Math.max(5, Math.round((p.sold_quantity / maxSold) * 95));
+      const barC = barColors[idx % barColors.length];
+      const trendSvg = p.trend_dir === 'up'
+        ? '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
+        : p.trend_dir === 'down'
+        ? '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>'
+        : '<line x1="5" y1="12" x2="19" y2="12"/>';
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-search', (p.title + ' ' + p.category_name).toLowerCase());
+      tr.innerHTML = `
+        <td><div class="product-cell"><div class="product-img">${EMOJI_MAP[p.category_id]||'📦'}</div><div><div class="product-info-name">${ESC(p.title)}</div><div class="product-info-cat">${ESC(p.category_name||p.seller.nickname||'')}</div></div></div></td>
+        <td class="sales-bar-cell"><div class="sales-bar-wrap"><div class="sales-bar"><div class="sales-bar-inner" style="width:0;background:${barC}" data-w="${soldW}"></div></div><span class="sales-bar-val">${(p.sold_quantity||0).toLocaleString('pt-BR')}</span></div></td>
+        <td><span class="price-tag">${ESC(p.price_fmt)}</span></td>
+        <td><span class="price-tag">${ESC(p.revenue_fmt)}</span></td>
+        <td><div class="trend-indicator ${p.trend_dir}"><svg viewBox="0 0 24 24">${trendSvg}</svg>${p.trend_pct}</div></td>
+        <td><span class="opportunity-badge ${p.score_level}">Score ${p.score}</span></td>
+      `;
+      if (p.permalink) tr.addEventListener('click', () => { showToast('Abrindo: ' + p.title.substring(0, 40)); window.open(p.permalink, '_blank'); });
+      else tr.addEventListener('click', () => showToast(p.title));
+      tbody.appendChild(tr);
+    });
+    // Anima barras após render
+    requestAnimationFrame(() => setTimeout(() => {
+      tbody.querySelectorAll('.sales-bar-inner[data-w]').forEach(b => { b.style.width = b.getAttribute('data-w') + '%'; });
+    }, 80));
+    if (total > products.length) showToast(`${products.length} de ${total.toLocaleString('pt-BR')} resultados para "${query}"`);
+  }
+
+  function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
+  function normalize(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+  function localFilter(term) {
+    const tbody = document.getElementById('productsTbody');
+    let visible = 0;
+    tbody.querySelectorAll('tr:not(.empty-row):not(.table-loading-row)').forEach(row => {
+      const match = term === '' || normalize(row.getAttribute('data-search')||row.textContent).includes(normalize(term));
+      row.classList.toggle('hidden', !match);
+      if (match) visible++;
+    });
+    let empty = tbody.querySelector('.empty-row');
+    if (visible === 0 && term) {
+      if (!empty) { empty = document.createElement('tr'); empty.className = 'empty-row'; empty.innerHTML = `<td colspan="6">Nenhum produto encontrado para "<strong>${ESC(term)}</strong>"</td>`; tbody.appendChild(empty); }
+      else { empty.querySelector('td').innerHTML = `Nenhum produto para "<strong>${ESC(term)}</strong>"`; empty.style.display = ''; }
+    } else if (empty) empty.style.display = 'none';
+  }
+
+  const debouncedApiSearch = debounce(async function(q) {
+    if (!q || q.length < 2) return;
+    showTableSkeleton();
+    try {
+      // Chama ML API diretamente do browser (sem passar pelo backend)
+      const data = await mlGet(`/sites/${ML_SITE}/search`, { q, limit: 10, sort: 'sold_quantity' });
+      const items = (data.results || []).map(item => {
+        const sold = item.sold_quantity || 0;
+        const price = item.price || 0;
+        const score = Math.min(100, Math.max(1, Math.round(
+          Math.min(sold/300,1)*40 + Math.min(price/300,1)*30 + 30
+        )));
+        return {
+          id: item.id, title: item.title, price, price_fmt: 'R$ ' + price.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+          sold_quantity: sold, revenue_estimate: sold*price,
+          revenue_fmt: 'R$ ' + (sold*price).toLocaleString('pt-BR',{minimumFractionDigits:2}),
+          category_id: item.category_id, category_name: item.category_id || '',
+          emoji: '📦', seller: item.seller || {},
+          thumbnail: item.thumbnail, permalink: item.permalink,
+          score, score_level: score>=70?'high':score>=40?'medium':'low',
+          trend_pct: sold>2000?'+58%':sold>1000?'+41%':sold>500?'+32%':sold>100?'+12%':'+2%',
+          trend_dir: sold>150?'up':sold>20?'flat':'down'
+        };
+      });
+      renderApiProducts(items, data.paging?.total || 0, q);
+    } catch (e) {
+      document.getElementById('productsTbody').innerHTML = `<tr class="empty-row"><td colspan="6">Erro na busca: ${ESC(e.message)}</td></tr>`;
+    }
+  }, 600);
+
+  document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.trim();
+    if (!q) { restoreMockRows(); return; }
+    apiConnected ? debouncedApiSearch(q) : localFilter(q);
+  });
+
+  function restoreMockRows() {
+    document.querySelectorAll('#productsTbody tr').forEach(r => r.classList.remove('hidden'));
+    const empty = document.querySelector('#productsTbody .empty-row');
+    if (empty) empty.style.display = 'none';
+    requestAnimationFrame(() => setTimeout(() => {
+      document.querySelectorAll('.sales-bar-inner[data-width]').forEach(b => { b.style.width = b.getAttribute('data-width') + '%'; });
+    }, 80));
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Export CSV
+  // ═══════════════════════════════════════════════════════
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    const rows = [['Produto','Categoria','Vendas','Preço','Receita Est.','Tendência','Score']];
+    document.querySelectorAll('#productsTbody tr:not(.empty-row):not(.hidden):not(.table-loading-row)').forEach(tr => {
+      const cells = tr.querySelectorAll('td');
+      if (cells.length < 6) return;
+      rows.push([
+        (cells[0].querySelector('.product-info-name')?.textContent||'').trim(),
+        (cells[0].querySelector('.product-info-cat')?.textContent||'').trim(),
+        (cells[1].querySelector('.sales-bar-val')?.textContent||'').trim(),
+        cells[2].textContent.trim(), cells[3].textContent.trim(),
+        cells[4].textContent.trim(), cells[5].textContent.trim()
+      ]);
+    });
+    const csv = rows.map(r => r.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'})), download: 'ml-radar-'+new Date().toISOString().slice(0,10)+'.csv' });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    showToast('CSV exportado com sucesso');
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // Modal análise de nicho
+  // ═══════════════════════════════════════════════════════
+  const modal = document.getElementById('nicheModal');
+  document.getElementById('btnNiche').addEventListener('click', () => { modal.classList.add('open'); document.getElementById('nicheQuery').focus(); });
+  document.getElementById('navOportunidades').addEventListener('click', () => modal.classList.add('open'));
+  document.getElementById('modalClose').addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+  document.getElementById('btnRunNiche').addEventListener('click', async () => {
+    const q = document.getElementById('nicheQuery').value.trim();
+    const cat = document.getElementById('nicheCategory').value;
+    const resultEl = document.getElementById('nicheResult');
+    if (!q && !cat) { showToast('Preencha ao menos um campo'); return; }
+    if (!apiConnected) { resultEl.className = 'modal-result'; resultEl.innerHTML = '<span style="color:var(--red)">Backend não conectado. Rode: uvicorn main:app --reload --port 8000</span>'; return; }
+    resultEl.className = 'modal-result loading'; resultEl.textContent = 'Buscando dados reais do ML...';
+    try {
+      // Análise de nicho direto da ML API
+      const params = {limit: 50, sort: 'sold_quantity'};
+      if (q) params.q = q;
+      if (cat) params.category = cat;
+      const mlData = await mlGet(`/sites/${ML_SITE}/search`, params);
+      const results = mlData.results || [];
+      const total = mlData.paging?.total || 0;
+      const prices = results.map(r => r.price||0).filter(Boolean);
+      const soldQty = results.map(r => r.sold_quantity||0);
+      const sellers = new Set(results.map(r => r.seller?.id)).size;
+      const avgPrice = prices.length ? prices.reduce((a,b)=>a+b,0)/prices.length : 0;
+      const totalSold = soldQty.reduce((a,b)=>a+b,0);
+      const top5 = [...results].sort((a,b)=>((b.price||0)*(b.sold_quantity||0))-((a.price||0)*(a.sold_quantity||0))).slice(0,5);
+      const top5Rev = top5.reduce((s,r)=>(r.price||0)*(r.sold_quantity||0)+s,0);
+      const nicheScore = Math.max(1, Math.min(100, Math.round(
+        Math.min(totalSold/500,1)*40 + Math.max(0,30-sellers) + Math.min(avgPrice/200,1)*30
+      )));
+      const data = {
+        niche_score: nicheScore, total_listings: total,
+        unique_sellers: sellers, analyzed_items: results.length,
+        avg_price_fmt: 'R$ '+avgPrice.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+        competition_level: sellers>30?'alta':sellers>12?'média':'baixa',
+        top5_revenue_fmt: 'R$ '+top5Rev.toLocaleString('pt-BR',{minimumFractionDigits:2}),
+        top_products: top5.map(r=>({title:r.title}))
+      };
+      if (data.error) { resultEl.className = 'modal-result'; resultEl.textContent = data.error; return; }
+      resultEl.className = 'modal-result';
+      resultEl.innerHTML = `
+        <strong>${ESC(q||data.category)}</strong> — Score de oportunidade: <span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:600">${data.niche_score}/100</span><br>
+        <div class="modal-result-grid">
+          <div class="modal-stat"><div class="modal-stat-label">Total de anúncios</div><div class="modal-stat-value">${(data.total_listings||0).toLocaleString('pt-BR')}</div></div>
+          <div class="modal-stat"><div class="modal-stat-label">Vendedores únicos</div><div class="modal-stat-value">${data.unique_sellers}</div></div>
+          <div class="modal-stat"><div class="modal-stat-label">Preço médio</div><div class="modal-stat-value" style="color:var(--accent)">${data.avg_price_fmt}</div></div>
+          <div class="modal-stat"><div class="modal-stat-label">Concorrência</div><div class="modal-stat-value">${data.competition_level}</div></div>
+          <div class="modal-stat"><div class="modal-stat-label">Receita top 5</div><div class="modal-stat-value" style="color:var(--accent)">${data.top5_revenue_fmt}</div></div>
+          <div class="modal-stat"><div class="modal-stat-label">Analisados</div><div class="modal-stat-value">${data.analyzed_items} itens</div></div>
+        </div>
+        ${data.top_products.length ? '<div style="margin-top:12px;font-size:.8rem;color:var(--text-muted)">Top produto: <span style="color:var(--text-primary)">' + ESC(data.top_products[0].title) + '</span></div>' : ''}
+      `;
+    } catch (e) {
+      resultEl.className = 'modal-result';
+      resultEl.innerHTML = `<span style="color:var(--red)">Erro: ${ESC(e.message)}</span>`;
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // Toast
+  // ═══════════════════════════════════════════════════════
+  let toastTimer;
+  function showToast(msg) {
+    document.getElementById('toastMsg').textContent = msg;
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Sidebar & navegação
+  // ═══════════════════════════════════════════════════════
+  const routeLabels = { dashboard:'Dashboard', explorar:'Explorar Produtos', concorrentes:'Concorrentes', tendencias:'Tendências', oportunidades:'Oportunidades', fornecedores:'Fornecedores', alertas:'Alertas', relatorios:'Relatórios', config:'Configurações' };
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      this.classList.add('active');
+      const route = this.getAttribute('data-route');
+      if (route && route !== 'oportunidades') { // oportunidades abre o modal
+        const t = routeLabels[route]; if (t) document.getElementById('pageTitle').textContent = t;
+        if (route !== 'dashboard') showToast('Seção: ' + t);
+      }
+      if (window.innerWidth <= 992) closeSidebar();
+    });
+  });
+
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  function closeSidebar() { sidebar.classList.remove('open'); overlay.style.display='none'; }
+  function openSidebar()  { sidebar.classList.add('open');    overlay.style.display='block'; }
+  document.getElementById('menuBtn').addEventListener('click', e => { e.stopPropagation(); sidebar.classList.contains('open') ? closeSidebar() : openSidebar(); });
+  overlay.addEventListener('click', closeSidebar);
+  window.addEventListener('resize', () => { if (window.innerWidth > 992) closeSidebar(); });
+
+  // ═══════════════════════════════════════════════════════
+  // Interatividade geral
+  // ═══════════════════════════════════════════════════════
+  document.querySelector('[data-action="notifications"]')?.addEventListener('click', () => showToast('Você tem 3 alertas não lidos'));
+  document.querySelector('[data-action="view-competitors"]')?.addEventListener('click', () => showToast('Carregando análise de concorrentes...'));
+  document.querySelector('[data-action="view-suppliers"]')?.addEventListener('click', () => showToast('Carregando catálogo de fornecedores...'));
+  document.getElementById('btnAnalyzeAll')?.addEventListener('click', () => { modal.classList.add('open'); });
+
+  document.querySelectorAll('.competitor-item').forEach(i => i.addEventListener('click', () => showToast('Concorrente: ' + (i.querySelector('.competitor-name')?.textContent||''))));
+  document.querySelectorAll('.opp-item').forEach(i => i.addEventListener('click', () => { if (apiConnected) { document.getElementById('nicheQuery').value = i.querySelector('.opp-name')?.textContent||''; modal.classList.add('open'); } else showToast(i.querySelector('.opp-name')?.textContent||''); }));
+  document.querySelectorAll('.supplier-card').forEach(i => i.addEventListener('click', () => showToast('Fornecedor: ' + (i.querySelector('.supplier-name')?.textContent||''))));
+  document.querySelectorAll('#productsTbody tr').forEach(r => r.addEventListener('click', () => showToast(r.querySelector('.product-info-name')?.textContent||'')));
+
+  // ═══════════════════════════════════════════════════════
+  // Charts
+  // ═══════════════════════════════════════════════════════
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.color = '#5a6478';
+    Chart.defaults.borderColor = '#1e2736';
+    Chart.defaults.font.family = "'DM Mono', monospace";
+    Chart.defaults.font.size = 11;
+
+    const mockData = {
+      '7d':  { labels:['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'], el:[2840,3120,2950,3680,4210,3890,3540], ca:[1560,1890,1720,1980,2340,2100,1920] },
+      '30d': { labels:['Sem 1','Sem 2','Sem 3','Sem 4'],           el:[12400,14200,13800,16500], ca:[7100,8400,7900,9200] },
+      '90d': { labels:['Março','Abril','Maio'],                     el:[52000,61000,58000], ca:[31000,35000,33000] },
+    };
+
+    const sCtx = document.getElementById('salesChart').getContext('2d');
+    const g1 = sCtx.createLinearGradient(0,0,0,260); g1.addColorStop(0,'rgba(0,245,160,.15)'); g1.addColorStop(1,'rgba(0,245,160,0)');
+    const g2 = sCtx.createLinearGradient(0,0,0,260); g2.addColorStop(0,'rgba(0,212,255,.1)');  g2.addColorStop(1,'rgba(0,212,255,0)');
+
+    const salesChart = new Chart(sCtx, {
+      type:'line',
+      data:{ labels:mockData['7d'].labels, datasets:[
+        { label:'Eletrônicos', data:mockData['7d'].el, borderColor:'#00f5a0', backgroundColor:g1, borderWidth:2, fill:true, tension:.4, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:'#00f5a0', pointHoverBorderColor:'#08090c', pointHoverBorderWidth:2 },
+        { label:'Casa & Deco', data:mockData['7d'].ca, borderColor:'#00d4ff', backgroundColor:g2, borderWidth:2, fill:true, tension:.4, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:'#00d4ff', pointHoverBorderColor:'#08090c', pointHoverBorderWidth:2 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+        plugins:{ legend:{display:true,position:'top',align:'end',labels:{boxWidth:8,boxHeight:8,usePointStyle:true,pointStyle:'circle',padding:16,font:{size:11}}},
+          tooltip:{backgroundColor:'#1c2333',titleColor:'#e8edf5',bodyColor:'#8892a4',borderColor:'#2a3548',borderWidth:1,padding:12,cornerRadius:8,displayColors:true,boxWidth:8,boxHeight:8,usePointStyle:true,
+            callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toLocaleString('pt-BR')+' vendas'}} },
+        scales:{ x:{grid:{display:false},ticks:{padding:8}}, y:{grid:{color:'rgba(30,39,54,.5)'},ticks:{padding:12,callback:v=>v>=1000?(v/1000).toFixed(1)+'k':v}} }
+      }
+    });
+
+    new Chart(document.getElementById('donutChart').getContext('2d'), {
+      type:'doughnut',
+      data:{ labels:['Eletrônicos','Casa & Deco','Esportes','Beleza','Outros'], datasets:[{data:[34,22,19,14,11],backgroundColor:['#00f5a0','#00d4ff','#ff8c42','#a855f7','#fbbf24'],borderColor:'#141920',borderWidth:3,hoverBorderColor:'#1c2333',hoverOffset:6}] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'70%',
+        plugins:{ legend:{display:false}, tooltip:{backgroundColor:'#1c2333',titleColor:'#e8edf5',bodyColor:'#8892a4',borderColor:'#2a3548',borderWidth:1,padding:12,cornerRadius:8,callbacks:{label:c=>c.label+': '+c.parsed+'%'}} }
+      }
+    });
+
+    document.querySelectorAll('.chart-tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        this.parentElement.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        const p = this.getAttribute('data-period');
+        if (mockData[p]) { salesChart.data.labels = mockData[p].labels; salesChart.data.datasets[0].data = mockData[p].el; salesChart.data.datasets[1].data = mockData[p].ca; salesChart.update(); }
+      });
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Animações iniciais
+  // ═══════════════════════════════════════════════════════
+  requestAnimationFrame(() => setTimeout(() => {
+    document.querySelectorAll('.sales-bar-inner[data-width]').forEach(b => { b.style.width = b.getAttribute('data-width') + '%'; });
+    const p = document.getElementById('planBarFill'); if (p) p.style.width = '67%';
+  }, 300));
+
+  // ─── Inicia app (tenta conectar ao backend) ───────────
+  initApp();
+});
+</script>
+</body>
+</html>
